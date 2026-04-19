@@ -7,7 +7,7 @@ test:
 	swift test
 
 lint:
-	swift package plugin swiftlint
+	swift package plugin --allow-writing-to-package-directory swiftlint
 
 format:
 	swift package plugin --allow-writing-to-package-directory swiftformat
