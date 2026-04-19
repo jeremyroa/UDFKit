@@ -1,0 +1,14 @@
+disabled_rules:
+  - todo
+opt_in_rules:
+  - force_unwrapping
+  - trailing_whitespace
+  - vertical_whitespace
+  - file_length
+  - function_body_length
+  - type_body_length
+excluded:
+  - .build
+  - Tests
+  - Package.swift
+reporter: "xcode"

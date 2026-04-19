@@ -3,6 +3,7 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
+/// Generates `StoreActionWrapper` conformance for an enum, producing `unwrapAs` and `wrap` switch methods.
 public struct StoreActionWrapperMacro: ExtensionMacro {
     public static func expansion(
         of _: SwiftSyntax.AttributeSyntax,
@@ -34,7 +35,8 @@ public struct StoreActionWrapperMacro: ExtensionMacro {
         enumDecl.memberBlock.members
             .compactMap { member in
                 guard let caseDecl = member.decl.as(EnumCaseDeclSyntax.self),
-                      let firstCase = caseDecl.elements.first else {
+                      let firstCase = caseDecl.elements.first
+                else {
                     return nil
                 }
 
@@ -49,7 +51,8 @@ public struct StoreActionWrapperMacro: ExtensionMacro {
         enumDecl.memberBlock.members
             .compactMap { member in
                 guard let caseDecl = member.decl.as(EnumCaseDeclSyntax.self),
-                      let firstCase = caseDecl.elements.first else {
+                      let firstCase = caseDecl.elements.first
+                else {
                     return nil
                 }
 
@@ -75,7 +78,7 @@ public struct StoreActionWrapperMacro: ExtensionMacro {
     ) throws -> ExtensionDeclSyntax {
         try ExtensionDeclSyntax(
             """
-            extension \(type.trimmed): \(protocols.first!) {
+            extension \(type.trimmed): StoreActionWrapper {
                 public func unwrapAs<T>() -> T? where T: StoreAction {
                     switch self {
                     \(raw: unwrapCases)
@@ -94,6 +97,6 @@ public struct StoreActionWrapperMacro: ExtensionMacro {
     }
 }
 
-enum Error: Swift.Error {
+private enum Error: Swift.Error {
     case onlyApplicableToEnum
 }

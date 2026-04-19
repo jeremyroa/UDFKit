@@ -1,3 +1,4 @@
+/// Composable reducer that delegates sub-state handling to registered child reducers.
 public struct BuilderReducer<State: StoreState, Action: StoreAction>: Reducer {
     private typealias ReducerFunction = (State, Action) -> State
     private struct ReducerRegistration {
@@ -41,6 +42,8 @@ public struct BuilderReducer<State: StoreState, Action: StoreAction>: Reducer {
         reducerRegistrations = registrations
     }
 
+    /// Registers a child reducer scoped to a sub-state keyPath.
+    /// Returns a new `BuilderReducer` with the registration added.
     public func registerReducer<R: Reducer>(
         _ keyPath: WritableKeyPath<State, R.State>,
         _ reducer: R

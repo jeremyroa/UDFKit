@@ -2,7 +2,7 @@ import SwiftCompilerPlugin
 import SwiftSyntaxMacros
 
 @main
-struct MacrosLibraryPlugin: CompilerPlugin {
+struct UDFKitMacrosPlugin: CompilerPlugin {
     let providingMacros: [Macro.Type] = [
         StoreActionWrapperMacro.self
     ]

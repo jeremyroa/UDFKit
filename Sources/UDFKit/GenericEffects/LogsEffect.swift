@@ -1,21 +1,29 @@
 import Foundation
-import AppEnvironmentUtilsLibrary
-import LogsUtilsLibrary
 
 public struct LogsEffect<GenericState: StoreState, GenericAction: StoreAction>: Effect {
     public typealias State = GenericState
     public typealias Action = GenericAction
 
-    private static var actionPrefix: String { "🎯 Action" }
-    private static var statePrefix: String { "📦 State" }
+    private let isEnabled: Bool
+
+    private static var actionPrefix: String {
+        "🎯 Action"
+    }
+
+    private static var statePrefix: String {
+        "📦 State"
+    }
+
     private static var separator: String {
         "\n----------------------------------------\n"
     }
 
-    public init() { /* Intentionally empty  */ }
+    public init(isEnabled: Bool = false) {
+        self.isEnabled = isEnabled
+    }
 
     public func process(state: GenericState, with action: GenericAction) async -> GenericAction? {
-        if AppEnvironment.isDev || AppEnvironment.isStaging {
+        if isEnabled {
             Self.logStateChange(action: action, state: state)
         }
         return nil
@@ -38,7 +46,7 @@ public struct LogsEffect<GenericState: StoreState, GenericAction: StoreAction>: 
         \(separator)
         """
 
-        Log.debug(message, type: .ui)
+        print(message)
     }
 
     private static func prettyPrintEnum(_ action: GenericAction) -> String {
