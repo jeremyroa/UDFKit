@@ -1,0 +1,8 @@
+--swiftversion 5.9
+--indent 4
+--allman false
+--wraparguments before-first
+--stripunusedargs closure-only
+--exclude .build
+# Disable rules that conflict with SwiftLint
+--disable trailingCommas,redundantInternal
