@@ -6,7 +6,7 @@ swift package plugin --allow-writing-to-package-directory swiftformat --lint \
     || { echo "❌ SwiftFormat violations. Run: make format"; exit 1; }
 
 echo "▶ SwiftLint..."
-swift package plugin swiftlint \
+swift package plugin --allow-writing-to-package-directory swiftlint \
     || { echo "❌ SwiftLint errors found."; exit 1; }
 
 echo "▶ swift build..."
