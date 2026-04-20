@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
 
+# Unset GIT_DIR / GIT_WORK_TREE so Swift Package Manager's internal git
+# operations are not confused by the hook environment (affects worktrees).
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
+      GIT_ALTERNATE_OBJECT_DIRECTORIES
+
 echo "▶ SwiftFormat lint..."
 swift package plugin --allow-writing-to-package-directory swiftformat --lint \
     || { echo "❌ SwiftFormat violations. Run: make format"; exit 1; }

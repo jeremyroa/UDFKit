@@ -47,11 +47,10 @@ public actor BuilderEffects<State: StoreState, Action: StoreAction>: Effect {
 
             let subDispatch: (@Sendable (E.Action) async -> Void)? = if let mainDispatch {
                 { @Sendable [mainWrapperType] subEffectAction in
-                    let wrapped: Action?
-                    if let wrapperType = mainWrapperType as? any StoreActionWrapper.Type {
-                        wrapped = wrapperType.wrap(subEffectAction) as? Action
+                    let wrapped: Action? = if let wrapperType = mainWrapperType as? any StoreActionWrapper.Type {
+                        wrapperType.wrap(subEffectAction) as? Action
                     } else {
-                        wrapped = subEffectAction as? Action
+                        subEffectAction as? Action
                     }
                     if let wrapped { await mainDispatch(wrapped) }
                 }

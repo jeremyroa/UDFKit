@@ -1,15 +1,17 @@
 # UDFKit
 
-A lightweight, composable Unidirectional Data Flow (UDF) library for Swift — inspired by Redux and The Composable Architecture (TCA). Drop it into any iOS 15+ project via Swift Package Manager.
+A lightweight, composable Unidirectional Data Flow (UDF) library for Swift — inspired by Redux and The Composable Architecture (TCA). Drop it into any iOS 17+ project via Swift Package Manager.
 
 ## Requirements
 
 | Requirement | Minimum |
 |-------------|---------|
-| iOS | 15.0 |
-| macOS | 12.0 |
-| Swift | 5.9 |
-| Xcode | 15.0 |
+| iOS | 17.0 |
+| macOS | 14.0 |
+| Swift | 6.0 |
+| Xcode | 16.0 |
+
+> UDFKit uses Swift 6 strict concurrency (`Sendable`, `@MainActor`, `@Observable`). A Swift 6-compatible toolchain (Xcode 16+) is required.
 
 ## Installation
 
