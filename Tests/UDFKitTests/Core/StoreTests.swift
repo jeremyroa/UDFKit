@@ -36,4 +36,28 @@ struct StoreTests {
         try await Task.sleep(for: .milliseconds(50))
         #expect(sut.state.someValue)
     }
+
+    @Test("concurrent dispatch converges to correct final state")
+    func concurrentDispatch_convergesToCorrectFinalState() async {
+        let store = Store(initialState: CounterState(count: 0), reducer: CounterReducer())
+        await withTaskGroup(of: Void.self) { group in
+            for _ in 0 ..< 100 {
+                group.addTask { await store.dispatch(.increment) }
+            }
+        }
+        #expect(store.state.count == 100)
+    }
+
+    @Test("dispatching to deallocated store does not crash")
+    func deallocatedStore_dispatchDoesNotCrash() async {
+        var store: Store<CounterState, CounterActions>? = Store(
+            initialState: CounterState(count: 0),
+            reducer: CounterReducer(),
+            AnyEffect.createEffect(SlowEffect())
+        )
+        weak let weakStore = store
+        store = nil
+        await weakStore?.dispatch(.increment)
+        // passes if no crash — weak reference becomes nil and dispatch is a no-op
+    }
 }

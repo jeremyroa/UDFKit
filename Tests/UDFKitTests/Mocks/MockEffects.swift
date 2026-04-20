@@ -44,3 +44,29 @@ actor RootEffect: Effect {
         }
     }
 }
+
+/// Effect that immediately re-dispatches its received action via the dispatch closure.
+actor DispatchingEffect: Effect {
+    typealias State = CounterState
+    typealias Action = CounterActions
+
+    func process(
+        state: CounterState,
+        with action: CounterActions,
+        dispatch: (@Sendable (CounterActions) async -> Void)?
+    ) async -> CounterActions? {
+        await dispatch?(action)
+        return nil
+    }
+}
+
+/// Effect that sleeps briefly before returning, simulating long-running async work.
+actor SlowEffect: Effect {
+    typealias State = CounterState
+    typealias Action = CounterActions
+
+    func process(state: CounterState, with action: CounterActions) async -> CounterActions? {
+        try? await Task.sleep(for: .milliseconds(50))
+        return nil
+    }
+}
