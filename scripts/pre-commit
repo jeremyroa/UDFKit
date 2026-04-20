@@ -20,4 +20,7 @@ swift build || { echo "❌ Build failed."; exit 1; }
 echo "▶ swift test..."
 swift test || { echo "❌ Tests failed."; exit 1; }
 
+echo "▶ Benchmarks..."
+make bench || { echo "❌ Benchmarks failed (threshold exceeded)."; exit 1; }
+
 echo "✅ Pre-commit checks passed."

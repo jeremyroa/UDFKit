@@ -329,6 +329,42 @@ Logs use `print()` — no external dependencies. Always returns `nil` (no side-a
 
 ---
 
+## Benchmarks
+
+Run the benchmark suite with:
+
+```bash
+make bench
+```
+
+Results are printed to stdout and saved to `benchmarks.txt`. The suite includes a regression gate — the build exits non-zero if the single-dispatch average exceeds 500 µs.
+
+Latest results (debug build, Apple M-series):
+
+```
+UDFKit Benchmark Suite
+--------------------------------------------------------------------------------
+Baseline — raw Swift reducer (no actors)                              320ns avg
+
+── UDFKit ──────────────────────────────────────────────────────────────────
+Single reducer — 10 000 dispatches                               25306ns avg  ✓
+BuilderReducer 1 sub-reducers — 1 000 dispatches                 25291ns avg  ✓
+BuilderReducer 10 sub-reducers — 1 000 dispatches                25152ns avg  ✓
+BuilderReducer 50 sub-reducers — 1 000 dispatches                25115ns avg  ✓
+BuilderEffects 1 no-op effects — 1 000 dispatches                39969ns avg  ✓
+BuilderEffects 10 no-op effects — 1 000 dispatches               39187ns avg  ✓
+BuilderEffects 50 no-op effects — 1 000 dispatches               40049ns avg  ✓
+Store dispatch latency — 1 000 sequential dispatches             23466ns avg  ✓
+Concurrent dispatch 100×10                                       7ms total  final count=1000  ✓
+
+--------------------------------------------------------------------------------
+Actor-hop overhead vs baseline: +24986ns avg per dispatch
+```
+
+> Actor-hop overhead is ~25 µs per dispatch on Apple Silicon. `BuilderReducer` and `BuilderEffects` scale linearly and stay well under thresholds even at 50 sub-components.
+
+---
+
 ## Contributing
 
 1. Clone the repo
