@@ -18,10 +18,12 @@ public actor BuilderEffects<State: StoreState, Action: StoreAction>: Effect {
 
     /// Registers a child effect scoped to a sub-state keyPath.
     /// Duplicate registrations (same type + keyPath) are ignored.
+    /// Returns `self` to enable fluent chaining.
+    @discardableResult
     public nonisolated func registerEffect<E: Effect>(
         _ keyPath: KeyPath<State, E.State>,
         _ effect: E
-    ) where E.Action: StoreAction {
+    ) -> Self where E.Action: StoreAction {
         // Build the boxed effect here (nonisolated) so only the @unchecked Sendable
         // BoxedEffect crosses the actor boundary — not the raw keyPath.
         let boxed = Self.makeBoxedEffect(effect: effect, keyPath: keyPath)
@@ -31,6 +33,7 @@ public actor BuilderEffects<State: StoreState, Action: StoreAction>: Effect {
         Task { [weak self] in
             await self?.storeEffect(boxed)
         }
+        return self
     }
 
     private nonisolated static func makeBoxedEffect<E: Effect>(

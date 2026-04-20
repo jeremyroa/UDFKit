@@ -79,7 +79,7 @@ Task { @MainActor in
         let store = Store(
             initialState: BenchState(),
             reducer: BenchReducer(),
-            AnyEffect.createEffect(effects)
+            AnyEffect(effects)
         )
         await measure("BuilderEffects \(count) no-op effects — 1 000 dispatches") {
             await store.dispatch(.increment)
