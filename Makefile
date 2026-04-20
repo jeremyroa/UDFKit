@@ -1,4 +1,4 @@
-.PHONY: build test lint format format-check install-hooks ci
+.PHONY: build test lint format format-check install-hooks ci bench
 
 build:
 	swift build
@@ -19,5 +19,10 @@ install-hooks:
 	cp scripts/pre-commit .git/hooks/pre-commit
 	chmod +x .git/hooks/pre-commit
 	@echo "✅ Pre-commit hook installed."
+
+bench:
+	swift build
+	.build/debug/UDFKitBenchmarks
+	@echo "📄 Results written to benchmarks.txt"
 
 ci: format-check lint build test
