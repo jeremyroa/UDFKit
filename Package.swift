@@ -51,5 +51,10 @@ let package = Package(
                 .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
             ]
         ),
+        .executableTarget(
+            name: "UDFKitBenchmarks",
+            dependencies: ["UDFKit"],
+            path: "Benchmarks"
+        ),
     ]
 )

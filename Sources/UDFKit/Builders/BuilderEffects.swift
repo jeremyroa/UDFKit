@@ -81,6 +81,8 @@ public actor BuilderEffects<State: StoreState, Action: StoreAction>: Effect {
         registeredEffects[boxed.id] = boxed
     }
 
+    /// O(n) task-spawning overhead where n = registered effect count;
+    /// withTaskGroup adds ~microseconds per effect; suitable for ≤ 20 concurrent effects
     public func process(
         state: State,
         with action: Action,
