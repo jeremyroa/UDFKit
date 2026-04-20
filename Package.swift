@@ -56,5 +56,10 @@ let package = Package(
             dependencies: ["UDFKit"],
             path: "Benchmarks"
         ),
+        .executableTarget(
+            name: "UDFKitExample",
+            dependencies: ["UDFKit"],
+            path: "Example"
+        ),
     ]
 )
