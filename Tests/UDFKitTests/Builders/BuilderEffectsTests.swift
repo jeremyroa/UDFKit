@@ -1,6 +1,13 @@
 import Testing
 @testable import UDFKit
 
+actor ActionCollector {
+    var collected: [RootActions] = []
+    func collect(_ action: RootActions) {
+        collected.append(action)
+    }
+}
+
 @Suite("BuilderEffects")
 struct BuilderEffectsTests {
     private func registered<E: Effect>(
@@ -123,5 +130,21 @@ struct BuilderEffectsTests {
         // CounterEffect returns the action directly; dispatch is a pass-through
         let result = await sut.process(state: state, with: .counter(.increment), dispatch: nil)
         #expect(result == .counter(.increment))
+    }
+
+    @Test("effect dispatch closure re-wraps child action into root action")
+    func dispatchClosure_rewrapsChildActionIntoRootAction() async {
+        let sut = BuilderEffects<RootState, RootActions>()
+        sut.registerEffect(\.counterState, DispatchingEffect())
+        try? await Task.sleep(for: .milliseconds(100))
+
+        let collector = ActionCollector()
+        let dispatch: @Sendable (RootActions) async -> Void = { action in
+            await collector.collect(action)
+        }
+        _ = await sut.process(state: RootState(), with: .counter(.increment), dispatch: dispatch)
+
+        let collected = await collector.collected
+        #expect(collected == [.counter(.increment)])
     }
 }

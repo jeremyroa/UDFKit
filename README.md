@@ -1,15 +1,17 @@
 # UDFKit
 
-A lightweight, composable Unidirectional Data Flow (UDF) library for Swift — inspired by Redux and The Composable Architecture (TCA). Drop it into any iOS 15+ project via Swift Package Manager.
+A lightweight, composable Unidirectional Data Flow (UDF) library for Swift — inspired by Redux and The Composable Architecture (TCA). Drop it into any iOS 17+ project via Swift Package Manager.
 
 ## Requirements
 
 | Requirement | Minimum |
 |-------------|---------|
-| iOS | 15.0 |
-| macOS | 12.0 |
-| Swift | 5.9 |
-| Xcode | 15.0 |
+| iOS | 17.0 |
+| macOS | 14.0 |
+| Swift | 6.0 |
+| Xcode | 16.0 |
+
+> UDFKit uses Swift 6 strict concurrency (`Sendable`, `@MainActor`, `@Observable`). A Swift 6-compatible toolchain (Xcode 16+) is required.
 
 ## Installation
 
@@ -78,7 +80,7 @@ let store = Store<CounterState, CounterAction>(
 
 // 5. Use in SwiftUI View
 struct CounterView: View {
-    @StateObject var store: Store<CounterState, CounterAction>
+    var store: Store<CounterState, CounterAction>
 
     var body: some View {
         VStack {
@@ -86,6 +88,18 @@ struct CounterView: View {
             Button("Increment") { Task { await store.dispatch(.increment) } }
             Button("Decrement") { Task { await store.dispatch(.decrement) } }
         }
+    }
+}
+
+// 6. Declare at root with @State, inject via environment
+struct RootView: View {
+    @State private var store = Store(
+        initialState: CounterState(),
+        reducer: CounterReducer()
+    )
+
+    var body: some View {
+        CounterView(store: store)
     }
 }
 ```
@@ -137,37 +151,40 @@ Implement as an `actor` (recommended) for thread safety. Return the next `Action
 ### `Store`
 
 ```swift
-@dynamicMemberLookup
-public class Store<State: StoreState, Action: StoreAction>: ObservableObject
+@Observable @MainActor @dynamicMemberLookup
+public final class Store<State: StoreState, Action: StoreAction>
 ```
 
-The main state container. Use as `@StateObject` in SwiftUI.
+The main state container. `@Observable` — use as `@State` at the root view; pass down by reference or via environment.
 
 | Member | Description |
 |--------|-------------|
 | `init(initialState:reducer:_:)` | Creates a store with initial state, a reducer, and optional effects |
-| `dispatch(_ action:) async` | Applies the reducer and runs effects (main-actor isolated) |
-| `environment() -> Binding<Store>` | Returns a Binding for sharing as a SwiftUI environment value |
+| `dispatch(_ action:) async` | Applies the reducer and runs effects (`@MainActor`-isolated) |
 | `binding(_:set:) -> Binding<Value>` | Creates a two-way binding that dispatches an action on change |
 | `store.someProperty` | Dynamic member lookup forwards to `State` properties |
 
-**Sharing state globally:**
+**Sharing state via environment (recommended for deep view hierarchies):**
 ```swift
-struct CounterStoreKey: EnvironmentKey {
-    static var defaultValue: Binding<CounterStore> = .constant(.init(...))
-}
+// Declare once in your app — not in UDFKit (Store is generic)
 extension EnvironmentValues {
-    var counterStore: Binding<CounterStore> {
-        get { self[CounterStoreKey.self] }
-        set { self[CounterStoreKey.self] = newValue }
-    }
+    @Entry var appStore: Store<AppState, AppAction>? = nil
 }
 
-// Parent:
-ParentView().environment(\.counterStore, store.environment())
+// Root view:
+@State private var store = Store(initialState: AppState(), reducer: AppReducer())
+var body: some View {
+    ContentView().environment(\.appStore, store)
+}
 
-// Child:
-@Environment(\.counterStore) @Binding var store
+// Any descendant:
+@Environment(\.appStore) private var store
+```
+
+**Two-way bindings:**
+```swift
+// store.binding dispatches an action through the full reducer+effects pipeline
+TextField("Name", text: store.binding(\.name, set: { .setName($0) }))
 ```
 
 ---

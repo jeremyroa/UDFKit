@@ -7,8 +7,13 @@ opt_in_rules:
   - file_length
   - function_body_length
   - type_body_length
+included:
+  - Sources
+  - Tests
 excluded:
   - .build
-  - Tests
   - Package.swift
+function_body_length:
+  warning: 80
+  error: 120
 reporter: "xcode"

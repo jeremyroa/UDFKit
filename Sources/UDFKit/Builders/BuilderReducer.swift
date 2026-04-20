@@ -56,6 +56,7 @@ public struct BuilderReducer<State: StoreState, Action: StoreAction>: Reducer {
         return BuilderReducer(registrations: newRegistrations)
     }
 
+    /// O(n) where n = registered reducer count; suitable for ≤ 50 sub-reducers
     public func reduce(oldState: State, with action: Action) -> State {
         processReducers(state: oldState, action: action)
     }
