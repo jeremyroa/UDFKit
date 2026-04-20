@@ -1,5 +1,5 @@
 {
-  "originHash" : "851ab70af715ac17d4cf901ee6725545179c51c54c75a8552e0e26d24d86b6fa",
+  "originHash" : "3d315152fa400e00fbda364c370f1b7132b7c1514288dc410ed85cc11f65a6f8",
   "pins" : [
     {
       "identity" : "collectionconcurrencykit",
@@ -38,12 +38,21 @@
       }
     },
     {
+      "identity" : "swift-filename-matcher",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/ileitch/swift-filename-matcher",
+      "state" : {
+        "revision" : "eef5ac0b6b3cdc64b3039b037bed2def8a1edaeb",
+        "version" : "2.0.1"
+      }
+    },
+    {
       "identity" : "swift-syntax",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/swift-syntax.git",
       "state" : {
-        "revision" : "6673b05995983461eef015c4768f1483c245db22",
-        "version" : "603.0.0-prerelease-2025-09-15"
+        "revision" : "15bf440e9a1e105996ae66a1446e91ffe0b3f8e9",
+        "version" : "604.0.0-prerelease-2025-12-15"
       }
     },
     {
@@ -60,8 +69,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/realm/SwiftLint.git",
       "state" : {
-        "revision" : "da9d742874d88f6d5d0f7b315d1fcf12655f2311",
-        "version" : "0.62.2"
+        "revision" : "9120756b6e20e483c35433c41a4c4a9d32fc898b",
+        "version" : "0.63.1"
       }
     },
     {

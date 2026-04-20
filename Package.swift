@@ -5,8 +5,8 @@ import CompilerPluginSupport
 let package = Package(
     name: "UDFKit",
     platforms: [
-        .iOS(.v15),
-        .macOS(.v12),
+        .iOS(.v17),
+        .macOS(.v14),
     ],
     products: [
         .library(
