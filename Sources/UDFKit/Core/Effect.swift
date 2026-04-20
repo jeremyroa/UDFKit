@@ -3,8 +3,8 @@ import Foundation
 public struct AnyEffect<State: StoreState, Action: StoreAction>: Sendable {
     let wrapped: any Effect<State, Action>
 
-    public static func createEffect(_ wrapped: any Effect<State, Action>) -> Self {
-        .init(wrapped: wrapped)
+    public init(_ wrapped: any Effect<State, Action>) {
+        self.wrapped = wrapped
     }
 }
 

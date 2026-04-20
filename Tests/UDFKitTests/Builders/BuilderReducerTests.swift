@@ -83,4 +83,19 @@ struct BuilderReducerTests {
         #expect(state.counterState.count == 1)
         #expect(state.textState.text == "Test")
     }
+
+    @Test(
+        "wrapped action routes to correct sub-reducer",
+        arguments: zip(
+            [RootActions.counter(.increment), RootActions.text(.append("hello"))],
+            [1, 0]
+        )
+    )
+    func wrappedAction_routesToCorrectSubReducer(action: RootActions, expectedCount: Int) {
+        let sut = makeSUT()
+            .registerReducer(\.counterState, CounterReducer())
+            .registerReducer(\.textState, TextReducer())
+        let result = sut.reduce(oldState: RootState(), with: action)
+        #expect(result.counterState.count == expectedCount)
+    }
 }

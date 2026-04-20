@@ -1,7 +1,9 @@
+import Darwin
+import Foundation
 import Testing
 @testable import UDFKit
 
-@Suite("LogsEffect")
+@Suite("LogsEffect", .serialized)
 struct LogsEffectTests {
     private let sut = LogsEffect<StateMock, ActionMock>(isEnabled: false)
 
@@ -23,5 +25,47 @@ struct LogsEffectTests {
         let state = StateMock(someValue: true, asyncValue: [])
         _ = await sut.process(state: state, with: .changeSomeValue(false))
         #expect(state.someValue == true)
+    }
+
+    @Test("isEnabled true produces output containing action name")
+    func enabledLogging_producesOutputWithActionName() async {
+        let enabledSUT = LogsEffect<StateMock, ActionMock>(isEnabled: true)
+        let state = StateMock(someValue: true, asyncValue: [])
+
+        let pipe = Pipe()
+        let originalFd = dup(STDOUT_FILENO)
+        dup2(pipe.fileHandleForWriting.fileDescriptor, STDOUT_FILENO)
+
+        _ = await enabledSUT.process(state: state, with: .changeSomeValue(false))
+
+        fflush(stdout)
+        dup2(originalFd, STDOUT_FILENO)
+        close(originalFd)
+        pipe.fileHandleForWriting.closeFile()
+
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let output = String(data: data, encoding: .utf8) ?? ""
+        #expect(output.contains("changeSomeValue"))
+    }
+
+    @Test("isEnabled false produces no output")
+    func disabledLogging_producesNoOutput() async {
+        let disabledSUT = LogsEffect<StateMock, ActionMock>(isEnabled: false)
+        let state = StateMock(someValue: true, asyncValue: [])
+
+        let pipe = Pipe()
+        let originalFd = dup(STDOUT_FILENO)
+        dup2(pipe.fileHandleForWriting.fileDescriptor, STDOUT_FILENO)
+
+        _ = await disabledSUT.process(state: state, with: .changeSomeValue(false))
+
+        fflush(stdout)
+        dup2(originalFd, STDOUT_FILENO)
+        close(originalFd)
+        pipe.fileHandleForWriting.closeFile()
+
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let output = String(data: data, encoding: .utf8) ?? ""
+        #expect(output.isEmpty)
     }
 }

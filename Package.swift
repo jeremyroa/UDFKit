@@ -5,8 +5,8 @@ import CompilerPluginSupport
 let package = Package(
     name: "UDFKit",
     platforms: [
-        .iOS(.v15),
-        .macOS(.v12),
+        .iOS(.v17),
+        .macOS(.v14),
     ],
     products: [
         .library(
@@ -17,7 +17,7 @@ let package = Package(
     dependencies: [
         .package(
             url: "https://github.com/swiftlang/swift-syntax.git",
-            "602.0.0"..<"604.0.0"
+            "602.0.0"..<"605.0.0"
         ),
         .package(
             url: "https://github.com/realm/SwiftLint.git",
@@ -50,6 +50,16 @@ let package = Package(
                 "UDFKitMacros",
                 .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
             ]
+        ),
+        .executableTarget(
+            name: "UDFKitBenchmarks",
+            dependencies: ["UDFKit"],
+            path: "Benchmarks"
+        ),
+        .executableTarget(
+            name: "UDFKitExample",
+            dependencies: ["UDFKit"],
+            path: "Example"
         ),
     ]
 )

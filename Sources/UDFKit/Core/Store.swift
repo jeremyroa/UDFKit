@@ -1,8 +1,11 @@
+import Observation
 import SwiftUI
 
+@Observable
+@MainActor
 @dynamicMemberLookup
-public class Store<State: StoreState, Action: StoreAction>: ObservableObject {
-    @Published private var state: State
+public final class Store<State: StoreState, Action: StoreAction> {
+    public private(set) var state: State
     private let reducer: any Reducer<State, Action>
     private var effects: [AnyEffect<State, Action>] = []
 
@@ -20,8 +23,6 @@ public class Store<State: StoreState, Action: StoreAction>: ObservableObject {
         state[keyPath: keyPath]
     }
 
-    /// Dispatches an action to the reducer and runs all registered effects.
-    @MainActor
     public func dispatch(_ action: Action) async {
         apply(action)
         await intercept(action)
@@ -31,12 +32,12 @@ public class Store<State: StoreState, Action: StoreAction>: ObservableObject {
         state = reducer.reduce(oldState: state, with: action)
     }
 
-    @MainActor
     private func intercept(_ action: Action) async {
         let currentState = state
         await withTaskGroup(of: Action?.self) { group in
             for effect in effects {
                 group.addTask { [weak self] in
+                    // [weak self]: if Store deallocates mid-effect the dispatcher silently no-ops
                     let dispatcher: @Sendable (Action) async -> Void = { [weak self] in
                         await self?.dispatch($0)
                     }
@@ -54,33 +55,18 @@ public class Store<State: StoreState, Action: StoreAction>: ObservableObject {
     }
 }
 
-extension Store: @unchecked Sendable {}
-
 public extension Store {
-    /// Returns a `Binding<Store>` for use as a global shared state via SwiftUI environment.
-    func environment() -> Binding<Store> {
-        .init {
-            self
-        } set: { [weak self] newValue in
-            self?.state = newValue.state
-        }
-    }
-}
-
-public extension Store {
-    /// Creates a two-way `Binding<Value>` that dispatches an action when the value changes.
-    func binding<Value>(
-        _ keyPath: WritableKeyPath<State, Value>,
-        set: @escaping (Value) -> Action
+    // nonisolated because Binding.get/set are synchronous non-isolated closures.
+    // Safe: SwiftUI always invokes Binding.get/set on the main thread.
+    nonisolated func binding<Value: Sendable>(
+        _ keyPath: KeyPath<State, Value> & Sendable,
+        set: @escaping @Sendable (Value) -> Action
     ) -> Binding<Value> {
         .init(
-            get: { self.state[keyPath: keyPath] },
-            set: { [weak self] newValue in
-                guard let self else { return }
-                let action = set(newValue)
-                self.apply(action)
-                Task { @MainActor in
-                    await self.intercept(action)
+            get: { MainActor.assumeIsolated { self.state[keyPath: keyPath] } },
+            set: { newValue in
+                Task { @MainActor [weak self] in
+                    await self?.dispatch(set(newValue))
                 }
             }
         )

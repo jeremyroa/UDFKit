@@ -15,9 +15,9 @@ extension RootActions: StoreActionWrapper {
     func unwrapAs<T: StoreAction>() -> T? {
         switch self {
         case let .counter(counterActions):
-            return counterActions as? T
+            counterActions as? T
         case let .text(textActions):
-            return textActions as? T
+            textActions as? T
         }
     }
 }
