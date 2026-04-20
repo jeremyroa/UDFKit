@@ -25,6 +25,9 @@ public actor BuilderEffects<State: StoreState, Action: StoreAction>: Effect {
         // Build the boxed effect here (nonisolated) so only the @unchecked Sendable
         // BoxedEffect crosses the actor boundary — not the raw keyPath.
         let boxed = Self.makeBoxedEffect(effect: effect, keyPath: keyPath)
+        // Fire-and-forget Task: no handle, cannot be cancelled. Safe because
+        // storeEffect is idempotent (duplicate IDs are ignored) and BoxedEffect
+        // is value-typed — losing the task only skips registration, never corrupts state.
         Task { [weak self] in
             await self?.storeEffect(boxed)
         }
