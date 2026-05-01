@@ -1,0 +1,17 @@
+UDFKit Benchmark Suite
+--------------------------------------------------------------------------------
+Baseline — raw Swift reducer (no actors)                          3ms total  320ns avg
+
+── UDFKit ──────────────────────────────────────────────────────────────────
+Single reducer — 10 000 dispatches                                253ms total  25306ns avg  ✓
+BuilderReducer 1 sub-reducers — 1 000 dispatches                  25ms total  25291ns avg  ✓
+BuilderReducer 10 sub-reducers — 1 000 dispatches                 25ms total  25152ns avg  ✓
+BuilderReducer 50 sub-reducers — 1 000 dispatches                 25ms total  25115ns avg  ✓
+BuilderEffects 1 no-op effects — 1 000 dispatches                 39ms total  39969ns avg  ✓
+BuilderEffects 10 no-op effects — 1 000 dispatches                39ms total  39187ns avg  ✓
+BuilderEffects 50 no-op effects — 1 000 dispatches                40ms total  40049ns avg  ✓
+Store dispatch latency — 1 000 sequential dispatches              23ms total  23466ns avg  ✓
+Concurrent dispatch 100×10                                        7ms total  final count=1000  ✓
+
+--------------------------------------------------------------------------------
+Actor-hop overhead vs baseline: +24986ns avg per dispatch
