@@ -181,7 +181,7 @@ Task { @MainActor in
         let store = Store(
             initialState: BenchState(),
             reducer: BenchReducer(),
-            AnyEffect(effects)
+            effects
         )
         let limit: Int64 = count == 50 ? effectsDispatchThresholdNs : singleDispatchThresholdNs
         await measure(

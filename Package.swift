@@ -61,5 +61,10 @@ let package = Package(
             dependencies: ["UDFKit"],
             path: "Example"
         ),
+        .executableTarget(
+            name: "UDFBuilderPlayground",
+            dependencies: ["UDFKit"],
+            path: "UDFBuilderPlayground"
+        ),
     ]
 )
