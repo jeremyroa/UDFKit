@@ -18,23 +18,28 @@ struct StoreTests {
         #expect(sut.someValue)
     }
 
-    @Test("binding set dispatches action and updates state")
-    func binding_updates_state_via_dispatch() async throws {
+    @Test("binding set updates state synchronously")
+    func binding_updates_state_synchronously() {
         let sut = makeSUT()
         let storeBinding = sut.binding(\.someValue, set: { .changeSomeValue($0) })
         storeBinding.wrappedValue = true
-        try await Task.sleep(for: .milliseconds(100))
+
         #expect(sut.someValue)
         #expect(storeBinding.wrappedValue)
     }
 
-    @Test("binding dispatches action through full pipeline")
-    func binding_routes_through_dispatch_pipeline() async throws {
-        let sut = makeSUT()
-        let binding = sut.binding(\.someValue, set: { .changeSomeValue($0) })
-        binding.wrappedValue = true
-        try await Task.sleep(for: .milliseconds(50))
-        #expect(sut.state.someValue)
+    @Test("binding state update does not wait for slow effects")
+    func binding_stateUpdates_beforeEffectCompletes() {
+        let sut = Store(
+            initialState: CounterState(count: 0),
+            reducer: CounterReducer(),
+            AnyEffect(SlowEffect())
+        )
+        let storeBinding = sut.binding(\.count, set: { _ in .increment })
+
+        storeBinding.wrappedValue = 1
+
+        #expect(sut.state.count == 1)
     }
 
     @Test("concurrent dispatch converges to correct final state")

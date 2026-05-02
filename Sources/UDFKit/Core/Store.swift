@@ -56,14 +56,16 @@ public final class Store<State: StoreState, Action: StoreAction> {
 }
 
 public extension Store {
-    // nonisolated because Binding.get/set are synchronous non-isolated closures.
-    // Safe: SwiftUI always invokes Binding.get/set on the main thread.
+    // nonisolated: Binding.get/set are synchronous non-isolated closures.
+    // Safe: SwiftUI always invokes Binding on the main thread.
     nonisolated func binding<Value: Sendable>(
         _ keyPath: KeyPath<State, Value> & Sendable,
         set: @escaping @Sendable (Value) -> Action
     ) -> Binding<Value> {
         .init(
-            get: { MainActor.assumeIsolated { self.state[keyPath: keyPath] } },
+            get: {
+                MainActor.assumeIsolated { self.state[keyPath: keyPath] }
+            },
             set: { newValue in
                 self.applyAndIntercept(set(newValue))
             }
