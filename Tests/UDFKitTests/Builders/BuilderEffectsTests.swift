@@ -1,150 +1,183 @@
 import Testing
 @testable import UDFKit
 
-actor ActionCollector {
-    var collected: [RootActions] = []
-    func collect(_ action: RootActions) {
-        collected.append(action)
-    }
-}
-
-@Suite("BuilderEffects")
+@Suite("BuilderEffects Tests")
 struct BuilderEffectsTests {
-    private func registered<E: Effect>(
-        _ effect: E,
-        on keyPath: KeyPath<RootState, E.State>
-    ) async -> BuilderEffects<RootState, RootActions> where E.Action: StoreAction {
-        let sut = BuilderEffects<RootState, RootActions>()
-        sut.registerEffect(keyPath, effect)
-        // Allow async registration Task to complete
-        try? await Task.sleep(for: .milliseconds(100))
-        return sut
+
+    @Test("GIVEN CounterEffect WHEN count is below threshold THEN returns empty stream")
+    func sut_whenCountBelowThreshold_thenReturnsEmptyStream() async throws {
+        let sut = try await makeSUT(with: CounterEffect(), on: \.counterState)
+
+        let stream = await sut.process(state: RootState(), with: .counter(.increment))
+        let results = await collect(stream)
+
+        #expect(results.isEmpty)
     }
 
-    @Test("counter effect returns nil when count is below threshold")
-    func counterEffect_returnsNil_whenCountLow() async {
-        let sut = await registered(CounterEffect(), on: \.counterState)
-        let result = await sut.process(state: RootState(), with: .counter(.increment))
-        #expect(result == nil)
-    }
-
-    @Test("counter effect returns increment action when count is at threshold")
-    func counterEffect_returnsIncrement_whenCountHigh() async {
+    @Test("GIVEN CounterEffect WHEN count is at threshold THEN emits re-wrapped increment action")
+    func sut_whenCountAtThreshold_thenEmitsReWrappedAction() async throws {
         var state = RootState()
         state.counterState.count = 10
-        let sut = await registered(CounterEffect(), on: \.counterState)
-        let result = await sut.process(state: state, with: .counter(.increment))
-        #expect(result == .counter(.increment))
+        let sut = try await makeSUT(with: CounterEffect(), on: \.counterState)
+
+        let stream = await sut.process(state: state, with: .counter(.increment))
+        let results = await collect(stream)
+
+        guard let first = results.first else {
+            Issue.record("Expected one action but received none")
+            return
+        }
+        guard case .counter(.increment) = first else {
+            Issue.record("Expected .counter(.increment) but received \(first)")
+            return
+        }
     }
 
-    @Test("text effect appends greeting when text is empty")
-    func textEffect_appendsGreeting_whenEmpty() async {
-        let sut = await registered(TextEffect(), on: \.textState)
-        let result = await sut.process(state: RootState(), with: .text(.append("Test")))
-        #expect(result == .text(.append("Hello!!")))
+    @Test("GIVEN CounterEffect registered WHEN process called with unrelated text action THEN returns empty stream")
+    func sut_whenNonMatchingAction_thenReturnsEmptyStream() async throws {
+        let sut = try await makeSUT(with: CounterEffect(), on: \.counterState)
+
+        let stream = await sut.process(state: RootState(), with: .text(.append("Test")))
+        let results = await collect(stream)
+
+        #expect(results.isEmpty)
     }
 
-    @Test("text effect returns nil when text is non-empty")
-    func textEffect_returnsNil_whenNonEmpty() async {
+    @Test("GIVEN TextEffect WHEN text is empty THEN emits re-wrapped greeting action")
+    func sut_whenTextIsEmpty_thenEmitsGreetingAction() async throws {
+        let sut = try await makeSUT(with: TextEffect(), on: \.textState)
+
+        let stream = await sut.process(state: RootState(), with: .text(.append("Test")))
+        let results = await collect(stream)
+
+        guard let first = results.first else {
+            Issue.record("Expected one action but received none")
+            return
+        }
+        guard case .text(.append(let value)) = first else {
+            Issue.record("Expected .text(.append) but received \(first)")
+            return
+        }
+        #expect(value == "Hello!!")
+    }
+
+    @Test("GIVEN TextEffect WHEN text is non-empty THEN returns empty stream")
+    func sut_whenTextIsNonEmpty_thenReturnsEmptyStream() async throws {
         var state = RootState()
         state.textState.text = "Not empty"
-        let sut = await registered(TextEffect(), on: \.textState)
-        let result = await sut.process(state: state, with: .text(.append("Test")))
-        #expect(result == nil)
+        let sut = try await makeSUT(with: TextEffect(), on: \.textState)
+
+        let stream = await sut.process(state: state, with: .text(.append("Test")))
+        let results = await collect(stream)
+
+        #expect(results.isEmpty)
     }
 
-    @Test("multiple registered effects process independently")
-    func multipleEffects_processIndependently() async {
+    @Test("GIVEN BuilderEffects<TextState TextActions> with self keyPath WHEN action matches THEN emits action directly without re-wrapping")
+    func sut_whenSelfKeyPathWithNonWrapperAction_thenEmitsDirectly() async throws {
+        let sut = BuilderEffects<TextState, TextActions>()
+        sut.registerEffect(\.self, TextEffect())
+        try await Task.sleep(for: .milliseconds(100))
+
+        let stream = await sut.process(state: TextState(), with: .append("Test"))
+        let results = await collectText(stream)
+
+        guard let first = results.first else {
+            Issue.record("Expected one action but received none")
+            return
+        }
+        guard case .append(let value) = first else {
+            Issue.record("Expected .append but received \(first)")
+            return
+        }
+        #expect(value == "Hello!!")
+    }
+
+    @Test("GIVEN same effect registered twice WHEN process called THEN emits only once — no duplicate")
+    func sut_whenSameEffectRegisteredTwice_thenEmitsOnce() async throws {
+        var state = RootState()
+        state.counterState.count = 10
+        let sut = BuilderEffects<RootState, RootActions>()
+        sut.registerEffect(\.counterState, CounterEffect())
+        sut.registerEffect(\.counterState, CounterEffect())
+        try await Task.sleep(for: .milliseconds(100))
+
+        let stream = await sut.process(state: state, with: .counter(.increment))
+        let results = await collect(stream)
+
+        #expect(results.count == 1)
+    }
+
+    @Test("GIVEN multiple distinct effects WHEN action matches only one THEN only that effect emits")
+    func sut_whenOnlyOneEffectMatchesAction_thenOnlyThatEffectEmits() async throws {
+        var state = RootState()
+        state.counterState.count = 10
         let sut = BuilderEffects<RootState, RootActions>()
         sut.registerEffect(\.counterState, CounterEffect())
         sut.registerEffect(\.textState, TextEffect())
-        try? await Task.sleep(for: .milliseconds(100))
-        let result = await sut.process(state: RootState(), with: .counter(.increment))
-        #expect(result == nil)
-    }
+        try await Task.sleep(for: .milliseconds(100))
 
-    @Test("re-registering same effect has no duplicate")
-    func reRegistering_sameEffect_noDuplicate() async {
-        var state = RootState()
-        state.counterState.count = 10
-        let sut = BuilderEffects<RootState, RootActions>()
-        sut.registerEffect(\.counterState, CounterEffect())
-        sut.registerEffect(\.counterState, CounterEffect())
-        try? await Task.sleep(for: .milliseconds(100))
-        let result = await sut.process(state: state, with: .counter(.increment))
-        #expect(result == .counter(.increment))
-    }
+        let stream = await sut.process(state: state, with: .counter(.increment))
+        let results = await collect(stream)
 
-    @Test("non-matching action returns nil")
-    func processingNonMatchingAction_returnsNil() async {
-        let sut = await registered(CounterEffect(), on: \.counterState)
-        let result = await sut.process(state: RootState(), with: .text(.append("Test")))
-        #expect(result == nil)
-    }
-
-    @Test("direct counter effect registration handles action")
-    func directCounterEffect_handlesAction() async {
-        var state = RootState()
-        state.counterState.count = 10
-        let sut = await registered(CounterEffect(), on: \.counterState)
-        let result = await sut.process(state: state, with: .counter(.increment))
-        #expect(result == .counter(.increment))
-    }
-
-    @Test("nested wrapped action is processed correctly")
-    func nestedAction_processedCorrectly() async {
-        var state = RootState()
-        state.counterState.count = 10
-        let sut = await registered(CounterEffect(), on: \.counterState)
-        let result = await sut.process(state: state, with: .counter(.increment))
-        #expect(result == .counter(.increment))
-    }
-
-    @Test("direct and nested effects both produce results")
-    func directAndNestedEffects_combination() async {
-        var state = RootState()
-        state.counterState.count = 10
-        let sut = BuilderEffects<RootState, RootActions>()
-        sut.registerEffect(\.self, RootEffect())
-        sut.registerEffect(\.counterState, CounterEffect())
-        try? await Task.sleep(for: .milliseconds(100))
-        let result = await sut.process(state: state, with: .counter(.increment))
-        #expect(result != nil)
-    }
-
-    @Test("effect registered with self keyPath processes state directly")
-    func directRegistration_withSelfKeyPath() async {
-        let sut = BuilderEffects<TextState, TextActions>()
-        sut.registerEffect(\.self, TextEffect())
-        try? await Task.sleep(for: .milliseconds(100))
-        let result = await sut.process(state: TextState(), with: .append("Test"))
-        #expect(result == .append("Hello!!"))
-    }
-
-    @Test("process with dispatch parameter forwards returned action")
-    func processWithDispatch() async {
-        var state = RootState()
-        state.counterState.count = 10
-        let sut = await registered(CounterEffect(), on: \.counterState)
-
-        // CounterEffect returns the action directly; dispatch is a pass-through
-        let result = await sut.process(state: state, with: .counter(.increment), dispatch: nil)
-        #expect(result == .counter(.increment))
-    }
-
-    @Test("effect dispatch closure re-wraps child action into root action")
-    func dispatchClosure_rewrapsChildActionIntoRootAction() async {
-        let sut = BuilderEffects<RootState, RootActions>()
-        sut.registerEffect(\.counterState, DispatchingEffect())
-        try? await Task.sleep(for: .milliseconds(100))
-
-        let collector = ActionCollector()
-        let dispatch: @Sendable (RootActions) async -> Void = { action in
-            await collector.collect(action)
+        #expect(results.count == 1)
+        guard case .counter(.increment) = results.first else {
+            Issue.record("Expected .counter(.increment) but received \(results)")
+            return
         }
-        _ = await sut.process(state: RootState(), with: .counter(.increment), dispatch: dispatch)
+    }
 
-        let collected = await collector.collected
-        #expect(collected == [.counter(.increment)])
+    @Test("GIVEN multiple distinct effects WHEN no effect matches action THEN returns empty stream")
+    func sut_whenNoEffectMatchesAction_thenReturnsEmptyStream() async throws {
+        let sut = BuilderEffects<RootState, RootActions>()
+        sut.registerEffect(\.counterState, CounterEffect())
+        sut.registerEffect(\.textState, TextEffect())
+        try await Task.sleep(for: .milliseconds(100))
+
+        let stream = await sut.process(state: RootState(), with: .counter(.increment))
+        let results = await collect(stream)
+
+        #expect(results.isEmpty)
+    }
+
+    @Test("GIVEN effects registered via fluent chaining WHEN process called THEN all registered effects are active")
+    func sut_whenEffectsRegisteredFluently_thenAllAreActive() async throws {
+        var state = RootState()
+        state.counterState.count = 10
+        let sut = BuilderEffects<RootState, RootActions>()
+        sut
+            .registerEffect(\.counterState, CounterEffect())
+            .registerEffect(\.textState, TextEffect())
+        try await Task.sleep(for: .milliseconds(100))
+
+        let stream = await sut.process(state: state, with: .counter(.increment))
+        let results = await collect(stream)
+
+        #expect(results.count == 1)
+    }
+}
+
+private extension BuilderEffectsTests {
+
+    func makeSUT<E: Effect>(
+        with effect: E,
+        on keyPath: KeyPath<RootState, E.State> & Sendable
+    ) async throws -> BuilderEffects<RootState, RootActions> where E.Action: StoreAction {
+        let sut = BuilderEffects<RootState, RootActions>()
+        sut.registerEffect(keyPath, effect)
+        try await Task.sleep(for: .milliseconds(100))
+        return sut
+    }
+
+    func collect(_ stream: AsyncStream<RootActions>) async -> [RootActions] {
+        var results: [RootActions] = []
+        for await action in stream { results.append(action) }
+        return results
+    }
+
+    func collectText(_ stream: AsyncStream<TextActions>) async -> [TextActions] {
+        var results: [TextActions] = []
+        for await action in stream { results.append(action) }
+        return results
     }
 }
