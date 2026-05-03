@@ -45,21 +45,6 @@ actor RootEffect: Effect {
     }
 }
 
-/// Effect that immediately re-dispatches its received action via the dispatch closure.
-actor DispatchingEffect: Effect {
-    typealias State = CounterState
-    typealias Action = CounterActions
-
-    func process(
-        state: CounterState,
-        with action: CounterActions,
-        dispatch: (@Sendable (CounterActions) async -> Void)?
-    ) async -> CounterActions? {
-        await dispatch?(action)
-        return nil
-    }
-}
-
 /// Effect that sleeps briefly before returning, simulating long-running async work.
 actor SlowEffect: Effect {
     typealias State = CounterState
@@ -68,5 +53,29 @@ actor SlowEffect: Effect {
     func process(state: CounterState, with action: CounterActions) async -> CounterActions? {
         try? await Task.sleep(for: .milliseconds(50))
         return nil
+    }
+}
+
+/// Effect that emits two follow-up actions via AsyncStream.
+struct MultiActionCounterEffect: Effect {
+    typealias State = CounterState
+    typealias Action = CounterActions
+
+    func process(state: CounterState, with action: CounterActions) -> AsyncStream<CounterActions> {
+        AsyncStream { continuation in
+            continuation.yield(.increment)
+            continuation.yield(.increment)
+            continuation.finish()
+        }
+    }
+}
+
+/// Effect that emits no follow-up actions.
+struct EmptyCounterEffect: Effect {
+    typealias State = CounterState
+    typealias Action = CounterActions
+
+    func process(state: CounterState, with action: CounterActions) -> AsyncStream<CounterActions> {
+        AsyncStream { $0.finish() }
     }
 }
