@@ -1,10 +1,9 @@
 /// Composable effect that runs multiple registered child effects in parallel.
 public actor BuilderEffects<State: StoreState, Action: StoreAction>: Effect {
-    private typealias DispatchFn = (@Sendable (Action) async -> Void)?
-    private typealias ProcessFn = (State, Action, DispatchFn) async -> Action?
+    private typealias ProcessFn = @Sendable (State, Action) -> AsyncStream<Action>
 
-    /// @unchecked Sendable: the closure captures a concrete Effect (Sendable) and an immutable
-    /// KeyPath (value type). Actor isolation ensures exclusive access during storage.
+    /// @unchecked Sendable: the closure is @Sendable and captures only Sendable values
+    /// (concrete Effect + immutable KeyPath). Actor isolation ensures exclusive access during storage.
     private struct BoxedEffect: @unchecked Sendable {
         let id: String
         let process: ProcessFn
@@ -24,12 +23,7 @@ public actor BuilderEffects<State: StoreState, Action: StoreAction>: Effect {
         _ keyPath: KeyPath<State, E.State>,
         _ effect: E
     ) -> Self where E.Action: StoreAction {
-        // Build the boxed effect here (nonisolated) so only the @unchecked Sendable
-        // BoxedEffect crosses the actor boundary — not the raw keyPath.
         let boxed = Self.makeBoxedEffect(effect: effect, keyPath: keyPath)
-        // Fire-and-forget Task: no handle, cannot be cancelled. Safe because
-        // storeEffect is idempotent (duplicate IDs are ignored) and BoxedEffect
-        // is value-typed — losing the task only skips registration, never corrupts state.
         Task { [weak self] in
             await self?.storeEffect(boxed)
         }
@@ -40,7 +34,7 @@ public actor BuilderEffects<State: StoreState, Action: StoreAction>: Effect {
         effect: E,
         keyPath: KeyPath<State, E.State>
     ) -> BoxedEffect where E.Action: StoreAction {
-        BoxedEffect(id: "\(type(of: effect))_\(keyPath)") { state, action, mainDispatch in
+        BoxedEffect(id: "\(type(of: effect))_\(keyPath)") { state, action in
             let mainWrapperType = action is any StoreActionWrapper ? type(of: action) : nil
 
             let subAction: E.Action? = switch action {
@@ -49,33 +43,30 @@ public actor BuilderEffects<State: StoreState, Action: StoreAction>: Effect {
             default: nil
             }
 
-            guard let subAction else { return nil }
-
-            let subDispatch: (@Sendable (E.Action) async -> Void)? = if let mainDispatch {
-                { @Sendable [mainWrapperType] subEffectAction in
-                    let wrapped: Action? = if let wrapperType = mainWrapperType as? any StoreActionWrapper.Type {
-                        wrapperType.wrap(subEffectAction) as? Action
-                    } else {
-                        subEffectAction as? Action
-                    }
-                    if let wrapped { await mainDispatch(wrapped) }
-                }
-            } else {
-                nil
+            guard let subAction else {
+                return AsyncStream { $0.finish() }
             }
 
-            let result = await effect.process(
+            let subStream: AsyncStream<E.Action> = effect.process(
                 state: state[keyPath: keyPath],
-                with: subAction,
-                dispatch: subDispatch
+                with: subAction
             )
 
-            guard let result else { return nil }
-
-            if let wrapperType = mainWrapperType as? any StoreActionWrapper.Type {
-                return wrapperType.wrap(result) as? Action
+            let (stream, continuation) = AsyncStream.makeStream(of: Action.self)
+            let task = Task {
+                for await subEffectAction in subStream {
+                    let wrappedAction: Action?
+                    if let wrapperType = mainWrapperType as? any StoreActionWrapper.Type {
+                        wrappedAction = wrapperType.wrap(subEffectAction) as? Action
+                    } else {
+                        wrappedAction = subEffectAction as? Action
+                    }
+                    if let wrapped = wrappedAction { continuation.yield(wrapped) }
+                }
+                continuation.finish()
             }
-            return result as? Action
+            continuation.onTermination = { _ in task.cancel() }
+            return stream
         }
     }
 
@@ -84,23 +75,35 @@ public actor BuilderEffects<State: StoreState, Action: StoreAction>: Effect {
         registeredEffects[boxed.id] = boxed
     }
 
-    /// O(n) task-spawning overhead where n = registered effect count;
-    /// withTaskGroup adds ~microseconds per effect; suitable for ≤ 20 concurrent effects
-    public func process(
-        state: State,
-        with action: Action,
-        dispatch: (@Sendable (Action) async -> Void)?
-    ) async -> Action? {
-        await withTaskGroup(of: Action?.self) { group in
-            for runner in registeredEffects.values {
-                group.addTask {
-                    await runner.process(state, action, dispatch)
+    /// Merges all child effect streams; yields every action emitted by any child.
+    public nonisolated func process(state: State, with action: Action) -> AsyncStream<Action> {
+        let (stream, continuation) = AsyncStream.makeStream(of: Action.self)
+        let task = Task { [weak self] in
+            guard let self else {
+                continuation.finish()
+                return
+            }
+            let runners = await self.getRunners()
+            await withTaskGroup(of: Void.self) { group in
+                for runner in runners {
+                    group.addTask {
+                        let subStream = runner.process(state, action)
+                        for await nextAction in subStream {
+                            continuation.yield(nextAction)
+                        }
+                    }
                 }
             }
-            for await result in group {
-                if let action = result { return action }
-            }
-            return nil
+            continuation.finish()
         }
+        continuation.onTermination = { _ in task.cancel() }
+        return stream
     }
+
+    private func getRunners() -> [BoxedEffect] {
+        Array(registeredEffects.values)
+    }
+
+    // Stub: the store always calls the stream overload above.
+    public func process(state: State, with action: Action) async -> Action? { nil }
 }

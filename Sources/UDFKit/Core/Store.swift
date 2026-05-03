@@ -7,16 +7,16 @@ import SwiftUI
 public final class Store<State: StoreState, Action: StoreAction> {
     public private(set) var state: State
     private let reducer: any Reducer<State, Action>
-    private var effects: [AnyEffect<State, Action>] = []
+    private var effects: [any Effect<State, Action>] = []
 
     public init(
         initialState state: State,
         reducer: some Reducer<State, Action>,
-        _ effects: AnyEffect<State, Action>...
+        _ effects: (any Effect<State, Action>)...
     ) {
         self.state = state
         self.reducer = reducer
-        self.effects = effects
+        self.effects = Array(effects)
     }
 
     public subscript<T>(dynamicMember keyPath: KeyPath<State, T>) -> T {
@@ -34,22 +34,14 @@ public final class Store<State: StoreState, Action: StoreAction> {
 
     private func intercept(_ action: Action) async {
         let currentState = state
-        await withTaskGroup(of: Action?.self) { group in
+        await withTaskGroup(of: Void.self) { group in
             for effect in effects {
                 group.addTask { [weak self] in
-                    // [weak self]: if Store deallocates mid-effect the dispatcher silently no-ops
-                    let dispatcher: @Sendable (Action) async -> Void = { [weak self] in
-                        await self?.dispatch($0)
+                    let stream: AsyncStream<Action> = effect.process(state: currentState, with: action)
+                    for await nextAction in stream {
+                        await self?.dispatch(nextAction)
                     }
-                    return await effect.wrapped.process(
-                        state: currentState,
-                        with: action,
-                        dispatch: dispatcher
-                    )
                 }
-            }
-            for await case let nextAction? in group {
-                await dispatch(nextAction)
             }
         }
     }

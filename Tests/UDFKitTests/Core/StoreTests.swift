@@ -33,7 +33,7 @@ struct StoreTests {
         let sut = Store(
             initialState: CounterState(count: 0),
             reducer: CounterReducer(),
-            AnyEffect(SlowEffect())
+            SlowEffect()
         )
         let storeBinding = sut.binding(\.count, set: { _ in .increment })
 
@@ -58,7 +58,7 @@ struct StoreTests {
         var store: Store<CounterState, CounterActions>? = Store(
             initialState: CounterState(count: 0),
             reducer: CounterReducer(),
-            AnyEffect(SlowEffect())
+            SlowEffect()
         )
         weak let weakStore = store
         store = nil
