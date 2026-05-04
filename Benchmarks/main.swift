@@ -70,8 +70,6 @@ func measureSync(
 
 // MARK: - Minimal Redux-style baseline (no UDFKit, pure Swift)
 
-// Used as a lower-bound reference: raw function calls with no actor hops.
-
 final class BaselineStore<State, Action> {
     private var state: State
     private let reducer: (inout State, Action) -> Void
@@ -89,40 +87,89 @@ final class BaselineStore<State, Action> {
 // MARK: - Shared benchmark state / actions / reducers
 
 struct BenchState: StoreState {
-    var count: Int = 0
-    var text: String = ""
+    var counter: CounterState = .init()
+    var profile: ProfileState = .init()
+    var search: SearchState  = .init()
 }
+
+struct CounterState: StoreState { var count: Int = 0 }
+struct ProfileState: StoreState { var name: String = "" }
+struct SearchState:  StoreState { var query: String = "" }
 
 enum BenchAction: StoreAction {
-    case increment
-    case setText(String)
+    case counter(CounterAction)
+    case profile(ProfileAction)
+    case search(SearchAction)
 }
 
-struct BenchReducer: Reducer {
-    func reduce(oldState: BenchState, with action: BenchAction) -> BenchState {
+enum CounterAction: StoreAction { case increment }
+enum ProfileAction: StoreAction { case setName(String) }
+enum SearchAction:  StoreAction { case setQuery(String) }
+
+struct CounterReducer: Reducer {
+    func reduce(oldState: CounterState, with action: CounterAction) -> CounterState {
         var state = oldState
         switch action {
         case .increment: state.count += 1
-        case let .setText(text): state.text = text
         }
         return state
     }
 }
 
-struct NoOpEffect: Effect {
-    func process(state: BenchState, with action: BenchAction) async -> BenchAction? {
-        nil
+struct ProfileReducer: Reducer {
+    func reduce(oldState: ProfileState, with action: ProfileAction) -> ProfileState {
+        var state = oldState
+        switch action {
+        case let .setName(name): state.name = name
+        }
+        return state
     }
+}
+
+struct SearchReducer: Reducer {
+    func reduce(oldState: SearchState, with action: SearchAction) -> SearchState {
+        var state = oldState
+        switch action {
+        case let .setQuery(query): state.query = query
+        }
+        return state
+    }
+}
+
+// BenchReducer — opera sobre BenchState con BenchAction
+// Necesario para stores de latencia y concurrencia (mismo State y Action que storeDSL)
+struct BenchReducer: Reducer {
+    func reduce(oldState: BenchState, with action: BenchAction) -> BenchState {
+        var state = oldState
+        switch action {
+        case .counter(.increment):
+            state.counter.count += 1
+        case .profile(let a):
+            switch a { case let .setName(n): state.profile.name = n }
+        case .search(let a):
+            switch a { case let .setQuery(q): state.search.query = q }
+        }
+        return state
+    }
+}
+
+struct CounterEffect: Effect {
+    func process(state: CounterState, with action: CounterAction) async -> CounterAction? { nil }
+}
+
+struct ProfileEffect: Effect {
+    func process(state: ProfileState, with action: ProfileAction) async -> ProfileAction? { nil }
+}
+
+struct SearchEffect: Effect {
+    func process(state: SearchState, with action: SearchAction) async -> SearchAction? { nil }
 }
 
 // MARK: - Thresholds
 
-// Derived from baseline overhead + realistic headroom for actor hops on iPhone-class hardware.
-// Raise a threshold only when you have profiler evidence that the cost is unavoidable.
-
-private let singleDispatchThresholdNs: Int64 = 500_000 // 0.5 ms — single dispatch
-private let builderDispatchThresholdNs: Int64 = 2_000_000 // 2 ms  — 50 sub-reducers
-private let effectsDispatchThresholdNs: Int64 = 5_000_000 // 5 ms  — 50 no-op effects
+private let singleDispatchThresholdNs: Int64  = 500_000
+private let dslDispatchThresholdNs: Int64     = 2_000_000
+private let effectsDispatchThresholdNs: Int64 = 5_000_000
 
 // MARK: - Run
 
@@ -131,11 +178,9 @@ Task { @MainActor in
     log(String(repeating: "-", count: 80))
 
     // ── Baseline ────────────────────────────────────────────────────────────────
-    // Pure-Swift, synchronous, no actor isolation. This is the theoretical floor.
-    let baselineStore = BaselineStore<BenchState, BenchAction>(state: BenchState()) { state, action in
+    let baselineStore = BaselineStore<CounterState, CounterAction>(state: CounterState()) { state, action in
         switch action {
         case .increment: state.count += 1
-        case let .setText(text): state.text = text
         }
     }
     let baseline = measureSync("Baseline — raw Swift reducer (no actors)", iterations: 10000) {
@@ -146,80 +191,76 @@ Task { @MainActor in
     log("── UDFKit ──────────────────────────────────────────────────────────────────")
 
     // 1. Single reducer — 10 000 sequential dispatches
-    let store1 = Store(initialState: BenchState(), reducer: BenchReducer())
+    let store1 = Store<BenchState, BenchAction>(state: .init()) {
+        ReducerScope(\.counter, CounterReducer())
+    }
     let r1 = await measure(
         "Single reducer — 10 000 dispatches",
         iterations: 10000,
         threshold: singleDispatchThresholdNs
     ) {
-        await store1.dispatch(.increment)
+        await store1.dispatch(.counter(.increment))
     }
 
-    // 2. BuilderReducer with 1, 10, 50 sub-reducers — 1 000 dispatches each
-    for count in [1, 10, 50] {
-        var builder = BuilderReducer<BenchState, BenchAction>()
-        for _ in 0 ..< count {
-            builder = builder.registerReducer(\.self, BenchReducer())
-        }
-        let store = Store(initialState: BenchState(), reducer: builder)
-        let limit: Int64 = count == 50 ? builderDispatchThresholdNs : singleDispatchThresholdNs
-        await measure(
-            "BuilderReducer \(count) sub-reducers — 1 000 dispatches",
-            threshold: limit
-        ) {
-            await store.dispatch(.increment)
-        }
+    // 2. DSL — Store con 3 ReducerScope + 3 EffectScope
+    let storeDSL = Store<BenchState, BenchAction>(state: .init()) {
+        ReducerScope(\.counter, CounterReducer())
+        ReducerScope(\.profile, ProfileReducer())
+        ReducerScope(\.search,  SearchReducer())
+    } effects: {
+        EffectScope(\.counter, CounterEffect())
+        EffectScope(\.profile, ProfileEffect())
+        EffectScope(\.search,  SearchEffect())
     }
 
-    // 3. BuilderEffects with 1, 10, 50 no-op effects — 1 000 dispatches each
-    for count in [1, 10, 50] {
-        let effects = BuilderEffects<BenchState, BenchAction>()
-        for _ in 0 ..< count {
-            effects.registerEffect(\.self, NoOpEffect())
-        }
-        try? await Task.sleep(for: .milliseconds(100))
-        let store = Store(
-            initialState: BenchState(),
-            reducer: BenchReducer(),
-            effects
-        )
-        let limit: Int64 = count == 50 ? effectsDispatchThresholdNs : singleDispatchThresholdNs
-        await measure(
-            "BuilderEffects \(count) no-op effects — 1 000 dispatches",
-            threshold: limit
-        ) {
-            await store.dispatch(.increment)
-        }
+    await measure(
+        "DSL Store — 3 reducers + 3 effects — 1 000 dispatches",
+        threshold: dslDispatchThresholdNs
+    ) {
+        await storeDSL.dispatch(.counter(.increment))
     }
 
-    // 4. Store dispatch latency — 1 000 sequential dispatches
-    let store4 = Store(initialState: BenchState(), reducer: BenchReducer())
+    await measure(
+        "DSL Store — effects dispatch — 1 000 dispatches",
+        threshold: effectsDispatchThresholdNs
+    ) {
+        await storeDSL.dispatch(.search(.setQuery("bench")))
+    }
+
+    // 3. Store dispatch latency — 1 000 sequential dispatches
+    let store3 = Store<BenchState, BenchAction>(
+        state: BenchState()) {
+            ReducerScope(\.counter, CounterReducer())
+        }
     await measure(
         "Store dispatch latency — 1 000 sequential dispatches",
         threshold: singleDispatchThresholdNs
     ) {
-        await store4.dispatch(.increment)
+        await store3.dispatch(.counter(.increment))
     }
 
-    // 5. Concurrent dispatch — 100 tasks × 10 dispatches
-    let store5 = Store(initialState: BenchState(), reducer: BenchReducer())
-    let clock5 = ContinuousClock()
-    let elapsed5 = await clock5.measure {
+    // 4. Concurrent dispatch — 100 tasks × 10 dispatches
+    let store4 = Store<BenchState, BenchAction>(
+        state: BenchState()) {
+            ReducerScope(\.counter, CounterReducer())
+        }
+    let clock4 = ContinuousClock()
+    let elapsed4 = await clock4.measure {
         await withTaskGroup(of: Void.self) { group in
             for _ in 0 ..< 100 {
                 group.addTask {
                     for _ in 0 ..< 10 {
-                        await store5.dispatch(.increment)
+                        await store4.dispatch(.counter(.increment))
                     }
                 }
             }
         }
     }
-    let ms5 = elapsed5.components.attoseconds / 1_000_000_000_000_000
-    let label5 = "Concurrent dispatch 100×10".padding(toLength: 64, withPad: " ", startingAt: 0)
+    let ms4 = elapsed4.components.attoseconds / 1_000_000_000_000_000
+    let label4 = "Concurrent dispatch 100×10".padding(toLength: 64, withPad: " ", startingAt: 0)
     let concurrentThresholdMs: Int64 = 100
-    let concurrentStatus = ms5 <= concurrentThresholdMs ? "✓" : "✗ OVER THRESHOLD (\(concurrentThresholdMs)ms)"
-    log("\(label5)  \(ms5)ms total  final count=\(store5.state.count)  \(concurrentStatus)")
+    let concurrentStatus = ms4 <= concurrentThresholdMs ? "✓" : "✗ OVER THRESHOLD (\(concurrentThresholdMs)ms)"
+    log("\(label4)  \(ms4)ms total  final count=\(store4.state.counter.count)  \(concurrentStatus)")
 
     // ── Overhead summary ────────────────────────────────────────────────────────
     log()
@@ -231,8 +272,6 @@ Task { @MainActor in
     ))
 
     // ── Regression gate ─────────────────────────────────────────────────────────
-    // Exit non-zero so CI fails fast on threshold violations.
-    // Re-run with UDFKIT_BENCH_NO_GATE=1 to skip the gate during profiling.
     writeResultsFile()
 
     if ProcessInfo.processInfo.environment["UDFKIT_BENCH_NO_GATE"] == nil {

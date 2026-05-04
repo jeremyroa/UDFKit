@@ -70,3 +70,21 @@ actor SlowEffect: Effect {
         return nil
     }
 }
+
+actor CounterEchoEffect: Effect {
+    func process(state: CounterState, with action: CounterActions) async -> AsyncStream<CounterActions> {
+        AsyncStream { continuation in
+            continuation.yield(action)
+            continuation.finish()
+        }
+    }
+}
+
+actor TextEchoEffect: Effect {
+    func process(state: TextState, with action: TextActions) async -> AsyncStream<TextActions> {
+        AsyncStream { continuation in
+            continuation.yield(action)
+            continuation.finish()
+        }
+    }
+}

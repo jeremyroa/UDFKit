@@ -4,12 +4,6 @@ import Testing
 @Suite("Store")
 @MainActor
 struct StoreTests {
-    private func makeSUT() -> Store<StateMock, ActionMock> {
-        Store(
-            initialState: StateMock(someValue: false, asyncValue: []),
-            reducer: MockReducer()
-        )
-    }
 
     @Test("dispatch applies reducer then runs effects")
     func dispatch_applies_reducer_then_effects() async {
@@ -33,7 +27,7 @@ struct StoreTests {
         let sut = Store(
             initialState: CounterState(count: 0),
             reducer: CounterReducer(),
-            AnyEffect(SlowEffect())
+            SlowEffect()
         )
         let storeBinding = sut.binding(\.count, set: { _ in .increment })
 
@@ -63,6 +57,68 @@ struct StoreTests {
         weak let weakStore = store
         store = nil
         await weakStore?.dispatch(.increment)
-        // passes if no crash — weak reference becomes nil and dispatch is a no-op
+    }
+
+    // MARK: - Convenience init tests
+
+    @Test("GIVEN Store init with reducer DSL WHEN action is dispatched THEN reducer updates state")
+    func sut_whenInitWithReducerDSL_thenReducerUpdatesState() async {
+        let sut = Store<CounterState, CounterActions>(state: CounterState(count: 0)) {
+            ReducerScope(\.self, CounterReducer())
+        }
+
+        await sut.dispatch(.increment)
+
+        #expect(sut.state.count == 1)
+    }
+
+    @Test("GIVEN Store init with reducer DSL WHEN multiple actions are dispatched THEN state accumulates correctly")
+    func sut_whenInitWithReducerDSL_thenStateAccumulatesAcrossDispatches() async {
+        let sut = Store<CounterState, CounterActions>(state: CounterState(count: 0)) {
+            ReducerScope(\.self, CounterReducer())
+        }
+
+        await sut.dispatch(.increment)
+        await sut.dispatch(.increment)
+        await sut.dispatch(.increment)
+
+        #expect(sut.state.count == 3)
+    }
+
+    @Test("GIVEN Store init with reducer and effects DSL WHEN action is dispatched THEN reducer updates state")
+    func sut_whenInitWithReducerAndEffectsDSL_thenReducerUpdatesState() async {
+        let sut = Store<CounterState, CounterActions>(state: CounterState(count: 0)) {
+            ReducerScope(\.self, CounterReducer())
+        } effects: {
+            EffectScope(\.self, SlowEffect())
+        }
+
+        await sut.dispatch(.increment)
+
+        #expect(sut.state.count == 1)
+    }
+
+    @Test("GIVEN Store init with reducer and effects DSL WHEN action is dispatched THEN binding reflects updated state")
+    func sut_whenInitWithReducerAndEffectsDSL_thenBindingReflectsUpdatedState() {
+        let sut = Store<CounterState, CounterActions>(state: CounterState(count: 0)) {
+            ReducerScope(\.self, CounterReducer())
+        } effects: {
+            EffectScope(\.self, SlowEffect())
+        }
+        let binding = sut.binding(\.count, set: { _ in .increment })
+
+        binding.wrappedValue = 1
+
+        #expect(sut.state.count == 1)
+    }
+}
+
+private extension StoreTests {
+
+    func makeSUT() -> Store<StateMock, ActionMock> {
+        Store(
+            initialState: StateMock(someValue: false, asyncValue: []),
+            reducer: MockReducer()
+        )
     }
 }
