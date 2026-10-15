@@ -2,10 +2,10 @@ import SwiftUI
 import UDFKit
 
 struct ContentView: View {
-    @State private var store = Store(
-        initialState: ExampleFormState(),
-        reducer: ExampleFormReducer()
-    )
+    @State private var store = Store<ExampleFormState, ExampleFormAction>(
+        state: .init()) {
+            ReducerScope(\.self, ExampleFormReducer())
+        }
 
     var body: some View {
         NavigationStack {

@@ -9,7 +9,7 @@ public final class Store<State: StoreState, Action: StoreAction> {
     private let reducer: any Reducer<State, Action>
     private var effects: [any Effect<State, Action>] = []
 
-    public init(
+    init(
         initialState state: State,
         reducer: some Reducer<State, Action>,
         _ effects: any Effect<State, Action>...
@@ -81,5 +81,39 @@ public extension Store {
         Task { @MainActor [weak self] in
             await self?.intercept(action)
         }
+    }
+}
+
+public extension Store {
+
+    /// Declarative init with result builder.
+    /// ```swift
+    /// Store<AppState, AppAction>(state: .init()) {
+    ///     ReducerScope(\.counter, CounterReducer())
+    /// } effects: {
+    ///     EffectScope(\.counter, CounterEffect())
+    /// }
+    /// ```
+    convenience init<R: Reducer<State, Action>, E: Effect<State, Action>>(
+        state initialState: State,
+        @ReducerDSL<State, Action> reducer: () -> R,
+        @EffectsDSL<State, Action> effects: () -> E
+    ) {
+        self.init(
+            initialState: initialState,
+            reducer: reducer(),
+            effects()
+        )
+    }
+
+    /// Overload without effects.
+    convenience init<R: Reducer<State, Action>>(
+        state initialState: State,
+        @ReducerDSL<State, Action> reducer: () -> R
+    ) {
+        self.init(
+            initialState: initialState,
+            reducer: reducer()
+        )
     }
 }
