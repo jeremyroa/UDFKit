@@ -58,7 +58,7 @@ struct StoreTests {
         var store: Store<CounterState, CounterActions>? = Store(
             initialState: CounterState(count: 0),
             reducer: CounterReducer(),
-            AnyEffect(SlowEffect())
+            SlowEffect()
         )
         weak let weakStore = store
         store = nil

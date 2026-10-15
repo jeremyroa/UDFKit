@@ -1,36 +1,34 @@
 import Foundation
 
-public struct AnyEffect<State: StoreState, Action: StoreAction>: Sendable {
-    let wrapped: any Effect<State, Action>
-
-    public init(_ wrapped: any Effect<State, Action>) {
-        self.wrapped = wrapped
-    }
-}
-
 public protocol Effect<State, Action>: Sendable {
     associatedtype State: StoreState
     associatedtype Action: StoreAction
 
-    func process(state: State, with action: Action) async -> Action?
+    // Stream variant — Store always calls this.
+    // Long-running effects (WebSocket, timers) override this directly.
+    func process(state: State, with action: Action) async -> AsyncStream<Action>
 
-    func process(
-        state: State,
-        with action: Action,
-        dispatch: (@Sendable (Action) async -> Void)?
-    ) async -> Action?
+    // One-shot variant — simple effects override this instead
+    // The stream variant's default implementation bridges here automatically
+    func process(state: State, with action: Action) async -> Action?
 }
 
 public extension Effect {
-    func process(
-        state: State,
-        with action: Action,
-        dispatch _: (@Sendable (Action) async -> Void)?
-    ) async -> Action? {
-        await process(state: state, with: action)
+    // Default stream bridges to the optional Action variant
+    // Effects that only need to return one action override process(...) -> Action? and never touch this
+    func process(state: State, with action: Action) async -> AsyncStream<Action> {
+        let result: Action? = await process(state: state, with: action)
+        return AsyncStream { continuation in
+            if let action = result { continuation.yield(action) }
+            continuation.finish()
+        }
     }
 
-    func process(state: State, with action: Action) async -> Action? {
-        await process(state: state, with: action, dispatch: nil)
-    }
+    // Default one-shot: ignore the action
+    func process(state: State, with action: Action) async -> Action? { nil }
+}
+
+public extension AsyncStream {
+    // Convenience — effects that emit nothing for a given action
+    static var finished: AsyncStream { .init { $0.finish() } }
 }
